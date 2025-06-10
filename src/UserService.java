@@ -30,7 +30,10 @@ public class UserService {
                 markStmt.setString(1, inputCode);
                 markStmt.executeUpdate();
 
-                System.out.println("Recharge successful! Amount added: ₹" + amount);
+                // Log transaction
+                logTransaction(conn, username, "Recharge Redeemed", amount);
+
+                System.out.println("Recharge successful! ₹" + amount + " added.");
             } else {
                 System.out.println("Invalid or already used code.");
             }
@@ -50,73 +53,133 @@ public class UserService {
             if (rs.next()) {
                 double balance = rs.getDouble("balance");
                 System.out.println("Your current balance is: ₹" + balance);
-            } else {
-                System.out.println("User not found.");
             }
-
-        } catch (Exception e) {
-            System.out.println("Error checking balance: " + e.getMessage());
+        } catch (SQLException e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
-    public static void transferFunds(Connection conn, String senderUsername) {
+    public static void transferFunds(Connection conn, String fromUser) {
         Scanner scanner = new Scanner(System.in);
-
-        System.out.print("Enter recipient's username: ");
-        String receiverUsername = scanner.nextLine();
-
+        System.out.print("Enter recipient username: ");
+        String toUser = scanner.nextLine();
         System.out.print("Enter amount to transfer: ");
         double amount = scanner.nextDouble();
-        scanner.nextLine();
+        scanner.nextLine(); // flush
+
+        if (amount <= 0) {
+            System.out.println("Amount must be greater than zero.");
+            return;
+        }
 
         try {
-            String checkBalanceSQL = "SELECT balance FROM users WHERE username = ?";
-            PreparedStatement checkStmt = conn.prepareStatement(checkBalanceSQL);
-            checkStmt.setString(1, senderUsername);
-            ResultSet rs = checkStmt.executeQuery();
+            conn.setAutoCommit(false);
 
-            if (rs.next()) {
-                double balance = rs.getDouble("balance");
+            // Check sender balance
+            String balanceSQL = "SELECT balance FROM users WHERE username = ?";
+            PreparedStatement balanceStmt = conn.prepareStatement(balanceSQL);
+            balanceStmt.setString(1, fromUser);
+            ResultSet balanceRs = balanceStmt.executeQuery();
 
-                if (balance >= amount) {
-                    conn.setAutoCommit(false); // begin transaction
-
-                    String deductSQL = "UPDATE users SET balance = balance - ? WHERE username = ?";
-                    PreparedStatement deductStmt = conn.prepareStatement(deductSQL);
-                    deductStmt.setDouble(1, amount);
-                    deductStmt.setString(2, senderUsername);
-                    deductStmt.executeUpdate();
-
-                    String addSQL = "UPDATE users SET balance = balance + ? WHERE username = ?";
-                    PreparedStatement addStmt = conn.prepareStatement(addSQL);
-                    addStmt.setDouble(1, amount);
-                    addStmt.setString(2, receiverUsername);
-                    int rows = addStmt.executeUpdate();
-
-                    if (rows == 0) {
-                        conn.rollback();
-                        System.out.println("Recipient username does not exist. Transaction cancelled.");
-                    } else {
-                        conn.commit();
-                        System.out.println("₹" + amount + " transferred to " + receiverUsername);
-                    }
-
-                    conn.setAutoCommit(true);
-                } else {
+            if (balanceRs.next()) {
+                double senderBalance = balanceRs.getDouble("balance");
+                if (senderBalance < amount) {
                     System.out.println("Insufficient balance.");
+                    conn.rollback();
+                    return;
                 }
-
-            } else {
-                System.out.println("Sender not found.");
             }
 
-        } catch (Exception e) {
+            // Deduct from sender
+            String deductSQL = "UPDATE users SET balance = balance - ? WHERE username = ?";
+            PreparedStatement deductStmt = conn.prepareStatement(deductSQL);
+            deductStmt.setDouble(1, amount);
+            deductStmt.setString(2, fromUser);
+            deductStmt.executeUpdate();
+
+            // Add to receiver
+            String addSQL = "UPDATE users SET balance = balance + ? WHERE username = ?";
+            PreparedStatement addStmt = conn.prepareStatement(addSQL);
+            addStmt.setDouble(1, amount);
+            addStmt.setString(2, toUser);
+            int rowsAffected = addStmt.executeUpdate();
+
+            if (rowsAffected == 0) {
+                System.out.println("Recipient does not exist.");
+                conn.rollback();
+                return;
+            }
+
+            // Log transactions
+            logTransaction(conn, fromUser, "Transferred to " + toUser, amount);
+            logTransaction(conn, toUser, "Received from " + fromUser, amount);
+
+            conn.commit();
+            System.out.println("Funds transferred successfully!");
+
+        } catch (SQLException e) {
             try {
                 conn.rollback();
             } catch (SQLException ex) {
-                ex.printStackTrace();
+                System.out.println("Rollback failed.");
             }
-            System.out.println("Transfer failed: " + e.getMessage());
+            System.out.println("Error: " + e.getMessage());
+        } finally {
+            try {
+                conn.setAutoCommit(true);
+            } catch (SQLException ex) {
+                System.out.println("Could not reset auto-commit.");
+            }
+        }
+    }
+
+   public static void viewTransactionHistory(Connection conn, String username, boolean isAdmin) {
+    try {
+        String sql;
+        PreparedStatement stmt;
+
+        if (isAdmin) {
+            sql = "SELECT * FROM transactions ORDER BY timestamp DESC";
+            stmt = conn.prepareStatement(sql);
+        } else {
+            sql = "SELECT * FROM transactions WHERE username = ? ORDER BY timestamp DESC";
+            stmt = conn.prepareStatement(sql);
+            stmt.setString(1, username);
+        }
+
+        ResultSet rs = stmt.executeQuery();
+
+        System.out.println("\n--- Transaction History ---");
+        while (rs.next()) {
+            String uname = rs.getString("username");
+            String action = rs.getString("action");
+            double amount = rs.getDouble("amount");
+            Timestamp timestamp = rs.getTimestamp("timestamp");
+
+            if (isAdmin) {
+                System.out.println(timestamp + " | " + uname + " | " + action + " | ₹" + amount);
+            } else {
+                System.out.println(timestamp + " | " + action + " | ₹" + amount);
+            }
+        }
+
+    } catch (SQLException e) {
+        System.out.println("Error fetching history: " + e.getMessage());
+    }
+}
+
+
+    // Log function
+    public static void logTransaction(Connection conn, String username, String action, double amount) {
+        try {
+            String sql = "INSERT INTO transactions (username, action, amount) VALUES (?, ?, ?)";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setString(1, username);
+            stmt.setString(2, action);
+            stmt.setDouble(3, amount);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            System.out.println("Failed to log transaction: " + e.getMessage());
         }
     }
 }
