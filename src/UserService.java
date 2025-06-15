@@ -182,4 +182,31 @@ public class UserService {
             System.out.println("Failed to log transaction: " + e.getMessage());
         }
     }
+
+    public static void viewTransactionHistoryByAdmin(Connection conn, String searchUsername) {
+    try {
+        String sql = "SELECT * FROM transactions WHERE username = ? ORDER BY timestamp DESC";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setString(1, searchUsername);
+        ResultSet rs = stmt.executeQuery();
+
+        System.out.println("\n--- Transaction History for " + searchUsername + " ---");
+        boolean found = false;
+        while (rs.next()) {
+            found = true;
+            String action = rs.getString("action");
+            double amount = rs.getDouble("amount");
+            Timestamp timestamp = rs.getTimestamp("timestamp");
+            System.out.println(timestamp + " | " + action + " | ₹" + amount);
+        }
+
+        if (!found) {
+            System.out.println("No transactions found for user: " + searchUsername);
+        }
+
+    } catch (SQLException e) {
+        System.out.println("Error fetching transaction history: " + e.getMessage());
+    }
+}
+
 }

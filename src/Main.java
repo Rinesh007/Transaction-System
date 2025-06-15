@@ -18,36 +18,43 @@ public class Main {
             System.out.println("Login successful!");
             System.out.println("Welcome " + user.getUsername() + ", Role: " + user.getRole());
 
-            if (user.getRole().equalsIgnoreCase("admin")) {
-                while (true) {
-                    System.out.println("\nAdmin Menu:");
-                    System.out.println("1. Generate Recharge Code");
-                    System.out.println("2. Create New User");
-                    System.out.println("3. View All Transaction History");
-                    System.out.println("4. Logout");
+          if (user.getRole().equalsIgnoreCase("admin")) {
+    while (true) {
+        System.out.println("\nAdmin Menu:");
+        System.out.println("1. Generate Recharge Code");
+        System.out.println("2. Create New User");
+        System.out.println("3. View All Transactions");
+        System.out.println("4. Search Transactions by Username");
+        System.out.println("5. Logout");
 
-                    int choice = scanner.nextInt();
-                    scanner.nextLine(); // clear buffer
+        int choice = scanner.nextInt();
+        scanner.nextLine(); // clear buffer
+        switch (choice) {
+            case 1:
+                AdminService.generateRechargeCode(conn);
+                break;
+            case 2:
+                AdminService.createUser(conn);
+                break;
+            case 3:
+               UserService.viewTransactionHistory(conn, "", true); // "" means show all
 
-                    switch (choice) {
-                        case 1:
-                            AdminService.generateRechargeCode(conn);
-                            break;
-                        case 2:
-                            AdminService.createUser(conn);
-                            break;
-                        case 3:
-                            UserService.viewTransactionHistory(conn, user.getUsername(),true);
-                            break;
-                        case 4:
-                            System.out.println("Logging out...");
-                            return;
-                        default:
-                            System.out.println("Invalid option.");
-                    }
-                }
+                break;
+            case 4:
+               System.out.print("Enter username to search transactions (or leave empty to show all): ");
+String searchUsername = scanner.nextLine();
+UserService.viewTransactionHistory(conn, searchUsername, true);
 
-            } else if (user.getRole().equalsIgnoreCase("user")) {
+                break;
+            case 5:
+                System.out.println("Logging out...");
+                return;
+            default:
+                System.out.println("Invalid option.");
+        }
+    }
+}
+ else if (user.getRole().equalsIgnoreCase("user")) {
                 while (true) {
                     System.out.println("\nUser Menu:");
                     System.out.println("1. Redeem Recharge Code");
