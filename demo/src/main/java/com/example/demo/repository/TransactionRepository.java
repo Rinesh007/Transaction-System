@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Integer> {
     List<Transaction> findByUsernameOrderByTimestampDesc(String username);
+    List<Transaction> findAllByOrderByTimestampDesc();
+
 }

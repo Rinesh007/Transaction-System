@@ -5,27 +5,22 @@ public class TransferRequest {
     private String recipient;
     private double amount;
 
-    public String getSender() {
-        return sender;
-    }
+    // Default constructor for JSON deserialization
+    public TransferRequest() {}
 
-    public void setSender(String sender) {
+    public TransferRequest(String sender, String recipient, double amount) {
         this.sender = sender;
-    }
-
-    public String getRecipient() {
-        return recipient;
-    }
-
-    public void setRecipient(String recipient) {
         this.recipient = recipient;
-    }
-
-    public double getAmount() {
-        return amount;
-    }
-
-    public void setAmount(double amount) {
         this.amount = amount;
     }
+
+    // Getters and setters
+    public String getSender() { return sender; }
+    public void setSender(String sender) { this.sender = sender; }
+
+    public String getRecipient() { return recipient; }
+    public void setRecipient(String recipient) { this.recipient = recipient; }
+
+    public double getAmount() { return amount; }
+    public void setAmount(double amount) { this.amount = amount; }
 }

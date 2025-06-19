@@ -6,16 +6,12 @@ import com.example.demo.model.User;
 import com.example.demo.repository.RechargeCodeRepository;
 import com.example.demo.repository.TransactionRepository;
 import com.example.demo.repository.UserRepository;
-
-import main.java.com.example.demo.model.TransactionRecord;
+import com.example.demo.model.TransactionRecord;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +33,8 @@ public class UserService {
     }
 
     public double checkBalance(String username) {
-        return userRepo.findById(username).map(User::getBalance).orElse(0.0);
+            User user = userRepo.findByUsername(username);
+    return user != null ? user.getBalance() : 0.0;
     }
 
     public String redeemCode(String username, String code) {
@@ -64,93 +61,53 @@ public class UserService {
     public List<Transaction> getUserTransactions(String username) {
         return transactionRepo.findByUsernameOrderByTimestampDesc(username);
     }
+
+    // ✅ Refactored version using JPA instead of raw SQL
+    @Transactional
     public String transferFunds(String sender, String recipient, double amount) {
-    String checkBalanceSQL = "SELECT balance FROM users WHERE username = ?";
-    String updateSenderSQL = "UPDATE users SET balance = balance - ? WHERE username = ?";
-    String updateRecipientSQL = "UPDATE users SET balance = balance + ? WHERE username = ?";
-    String logSQL = "INSERT INTO transactions (username, action, amount) VALUES (?, ?, ?)";
+        User senderUser = userRepo.findById(sender).orElse(null);
+        User recipientUser = userRepo.findById(recipient).orElse(null);
 
-    try (Connection conn = DBConnection.getConnection()) {
-        conn.setAutoCommit(false);
+        if (senderUser == null) return "Sender not found";
+        if (recipientUser == null) return "Recipient not found";
+        if (senderUser.getBalance() < amount) return "Insufficient balance";
 
-        // Check sender balance
-        PreparedStatement checkStmt = conn.prepareStatement(checkBalanceSQL);
-        checkStmt.setString(1, sender);
-        ResultSet rs = checkStmt.executeQuery();
+        // Update balances
+        senderUser.setBalance(senderUser.getBalance() - amount);
+        recipientUser.setBalance(recipientUser.getBalance() + amount);
 
-        if (!rs.next()) return "Sender not found";
-        double balance = rs.getDouble("balance");
-        if (balance < amount) return "Insufficient balance";
-
-        // Deduct from sender
-        PreparedStatement deductStmt = conn.prepareStatement(updateSenderSQL);
-        deductStmt.setDouble(1, amount);
-        deductStmt.setString(2, sender);
-        deductStmt.executeUpdate();
-
-        // Add to recipient
-        PreparedStatement addStmt = conn.prepareStatement(updateRecipientSQL);
-        addStmt.setDouble(1, amount);
-        addStmt.setString(2, recipient);
-        int rowsAffected = addStmt.executeUpdate();
-
-        if (rowsAffected == 0) {
-            conn.rollback();
-            return "Recipient not found";
-        }
+        userRepo.save(senderUser);
+        userRepo.save(recipientUser);
 
         // Log transactions
-        PreparedStatement logStmt = conn.prepareStatement(logSQL);
-        logStmt.setString(1, sender);
-        logStmt.setString(2, "Transfer to " + recipient);
-        logStmt.setDouble(3, amount);
-        logStmt.executeUpdate();
+        Timestamp now = new Timestamp(System.currentTimeMillis());
 
-        logStmt.setString(1, recipient);
-        logStmt.setString(2, "Received from " + sender);
-        logStmt.setDouble(3, amount);
-        logStmt.executeUpdate();
+        Transaction senderTx = new Transaction(sender, "Transfer to " + recipient, amount, now);
+        Transaction recipientTx = new Transaction(recipient, "Received from " + sender, amount, now);
 
-        conn.commit();
+        transactionRepo.save(senderTx);
+        transactionRepo.save(recipientTx);
+
         return "Transfer successful";
-
-    } catch (SQLException e) {
-        e.printStackTrace();
-        return "Error occurred during transfer";
-    }
-}
-public List<TransactionRecord> getTransactionHistory(String username, boolean isAdmin) {
-    List<TransactionRecord> history = new ArrayList<>();
-    String sql = isAdmin
-        ? "SELECT * FROM transactions ORDER BY timestamp DESC"
-        : "SELECT * FROM transactions WHERE username = ? ORDER BY timestamp DESC";
-
-    try (Connection conn = DBConnection.getConnection()) {
-        PreparedStatement stmt = conn.prepareStatement(sql);
-
-        if (!isAdmin) {
-            stmt.setString(1, username);
-        }
-
-        ResultSet rs = stmt.executeQuery();
-
-        while (rs.next()) {
-            TransactionRecord record = new TransactionRecord(
-                rs.getString("username"),
-                rs.getString("action"),
-                rs.getDouble("amount"),
-                rs.getTimestamp("timestamp")
-            );
-            history.add(record);
-        }
-
-    } catch (SQLException e) {
-        e.printStackTrace();
     }
 
-    return history;
-}
+    // ✅ Refactored getTransactionHistory using JPA
+    public List<TransactionRecord> getTransactionHistory(String username, boolean isAdmin) {
+        List<Transaction> transactions = isAdmin
+            ? transactionRepo.findAllByOrderByTimestampDesc()
+            : transactionRepo.findByUsernameOrderByTimestampDesc(username);
 
+        List<TransactionRecord> history = new ArrayList<>();
 
+        for (Transaction tx : transactions) {
+            history.add(new TransactionRecord(
+                tx.getUsername(),
+                tx.getAction(),
+                tx.getAmount(),
+                tx.getTimestamp()
+            ));
+        }
 
+        return history;
+    }
 }
