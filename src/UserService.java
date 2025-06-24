@@ -43,21 +43,22 @@ public class UserService {
         }
     }
 
-    public static void checkBalance(Connection conn, String username) {
-        try {
-            String sql = "SELECT balance FROM users WHERE username = ?";
-            PreparedStatement stmt = conn.prepareStatement(sql);
-            stmt.setString(1, username);
-            ResultSet rs = stmt.executeQuery();
-
-            if (rs.next()) {
-                double balance = rs.getDouble("balance");
-                System.out.println("Your current balance is: ₹" + balance);
-            }
-        } catch (SQLException e) {
-            System.out.println("Error: " + e.getMessage());
+    public static double checkBalance(Connection conn, String username) {
+    double balance = 0;
+    try {
+        String query = "SELECT balance FROM users WHERE username = ?";
+        PreparedStatement ps = conn.prepareStatement(query);
+        ps.setString(1, username);
+        ResultSet rs = ps.executeQuery();
+        if (rs.next()) {
+            balance = rs.getDouble("balance");
         }
+    } catch (Exception e) {
+        e.printStackTrace();
     }
+    return balance;
+}
+
 
     public static void transferFunds(Connection conn, String fromUser) {
         Scanner scanner = new Scanner(System.in);
