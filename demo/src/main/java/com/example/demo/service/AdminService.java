@@ -26,12 +26,13 @@ public class AdminService {
     private TransactionRepository transactionRepo;
 
     public String createUser(String username, String password) {
-        if (userRepo.existsById(username)) return "User already exists.";
+    if (userRepo.existsByUsername(username)) return "User already exists.";
 
-        User newUser = new User(username, password, "user", 0.0);
-        userRepo.save(newUser);
-        return "User created successfully.";
-    }
+    User newUser = new User(username, password, "user", 0.0);
+    userRepo.save(newUser);
+    return "User created successfully.";
+}
+
 
     public String generateRechargeCode(double amount) {
         String code = UUID.randomUUID().toString().substring(0, 8);

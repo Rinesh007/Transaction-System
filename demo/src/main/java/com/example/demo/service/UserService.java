@@ -43,7 +43,7 @@ public class UserService {
             return "Invalid or already used code.";
         }
 
-        User user = userRepo.findById(username).orElse(null);
+        User user = userRepo.findByUsername(username);
         if (user == null) return "User not found.";
 
         user.setBalance(user.getBalance() + rechargeCode.getAmount());
@@ -65,8 +65,9 @@ public class UserService {
     // ✅ Refactored version using JPA instead of raw SQL
     @Transactional
     public String transferFunds(String sender, String recipient, double amount) {
-        User senderUser = userRepo.findById(sender).orElse(null);
-        User recipientUser = userRepo.findById(recipient).orElse(null);
+       User senderUser = userRepo.findByUsername(sender);
+User recipientUser = userRepo.findByUsername(recipient);
+
 
         if (senderUser == null) return "Sender not found";
         if (recipientUser == null) return "Recipient not found";
